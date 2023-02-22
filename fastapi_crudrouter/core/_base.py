@@ -4,7 +4,7 @@ from typing import Any, Callable, Generic, List, Optional, Type, Union
 from fastapi import APIRouter, HTTPException
 from fastapi.types import DecoratedCallable
 
-from ._types import T, DEPENDENCIES
+from ._types import T, DEPENDENCIES, PAGINATIONEXTRADATA
 from ._utils import pagination_factory, schema_factory
 
 NOT_FOUND = HTTPException(404, "Item not found")
@@ -58,7 +58,7 @@ class CRUDGenerator(Generic[T], APIRouter, ABC):
                 "",
                 self._get_all(),
                 methods=["GET"],
-                response_model=Optional[List[self.schema]],  # type: ignore
+                response_model=Optional[List[self.schema] | PAGINATIONEXTRADATA],  # type: ignore
                 summary="Get All",
                 dependencies=get_all_route,
             )

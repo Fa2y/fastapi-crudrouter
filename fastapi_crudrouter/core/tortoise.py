@@ -1,7 +1,7 @@
 from typing import Any, Callable, List, Type, cast, Coroutine, Optional, Union
 
 from . import CRUDGenerator, NOT_FOUND
-from ._types import DEPENDENCIES, PAGINATION, PYDANTIC_SCHEMA as SCHEMA
+from ._types import PAGINATIONEXTRADATA, DEPENDENCIES, PAGINATION, PYDANTIC_SCHEMA as SCHEMA
 
 try:
     from tortoise.models import Model
@@ -13,7 +13,7 @@ else:
 
 
 CALLABLE = Callable[..., Coroutine[Any, Any, Model]]
-CALLABLE_LIST = Callable[..., Coroutine[Any, Any, List[Model]]]
+CALLABLE_LIST = Callable[..., Coroutine[Any, Any, PAGINATIONEXTRADATA | List[Model]]]
 
 
 class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
@@ -32,6 +32,7 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
         update_route: Union[bool, DEPENDENCIES] = True,
         delete_one_route: Union[bool, DEPENDENCIES] = True,
         delete_all_route: Union[bool, DEPENDENCIES] = True,
+        paginationextradata: Union[bool, DEPENDENCIES] = False,
         **kwargs: Any
     ) -> None:
         assert (
@@ -40,6 +41,7 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
 
         self.db_model = db_model
         self._pk: str = db_model.describe()["pk_field"]["db_column"]
+        self.paginationextradata = paginationextradata
 
         super().__init__(
             schema=schema,
@@ -58,11 +60,16 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
         )
 
     def _get_all(self, *args: Any, **kwargs: Any) -> CALLABLE_LIST:
-        async def route(pagination: PAGINATION = self.pagination) -> List[Model]:
+        async def route(pagination: PAGINATION = self.pagination) -> PAGINATIONEXTRADATA | List[Model]:
             skip, limit = pagination.get("skip"), pagination.get("limit")
             query = self.db_model.all().offset(cast(int, skip))
+            if self.paginationextradata:
+                count = self.db_model.all().count() # added for issue #138
             if limit:
                 query = query.limit(limit)
+            query = self.schema.from_queryset(query) # added from issue #153
+            if self.paginationextradata:
+                return {"results": await query, "count": await count}
             return await query
 
         return route
@@ -70,7 +77,7 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
     def _get_one(self, *args: Any, **kwargs: Any) -> CALLABLE:
         async def route(item_id: int) -> Model:
             model = await self.db_model.filter(id=item_id).first()
-
+            model = await self.schema.from_tortoise_orm(model) # added from issue #153
             if model:
                 return model
             else:
