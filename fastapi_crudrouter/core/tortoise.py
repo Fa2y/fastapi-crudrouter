@@ -90,7 +90,7 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
             db_model = self.db_model(**model.dict())
             await db_model.save()
 
-            return db_model
+            return await self.schema.from_tortoise_orm(db_model)
 
         return route
 
