@@ -1,7 +1,12 @@
 from typing import Any, Callable, List, Type, cast, Coroutine, Optional, Union
 
 from . import CRUDGenerator, NOT_FOUND
-from ._types import PAGINATIONEXTRADATA, DEPENDENCIES, PAGINATION, PYDANTIC_SCHEMA as SCHEMA
+from ._types import (
+    PAGINATIONEXTRADATA,
+    DEPENDENCIES,
+    PAGINATION,
+    PYDANTIC_SCHEMA as SCHEMA,
+)
 
 try:
     from tortoise.models import Model
@@ -60,14 +65,23 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
         )
 
     def _get_all(self, *args: Any, **kwargs: Any) -> CALLABLE_LIST:
-        async def route(pagination: PAGINATION = self.pagination) -> PAGINATIONEXTRADATA | List[Model]:
-            skip, limit = pagination.get("skip"), pagination.get("limit")
-            query = self.db_model.all().offset(cast(int, skip))
+        async def route(
+            pagination: PAGINATION = self.pagination,
+        ) -> PAGINATIONEXTRADATA | List[Model]:
+            skip, limit, sortby = (
+                pagination.get("skip"),
+                pagination.get("limit"),
+                pagination.get("sortby"),
+            )
+            if sortby:
+                query = self.db_model.all().order_by(sortby).offset(cast(int, skip))
+            else:
+                query = self.db_model.all().offset(cast(int, skip))
             if self.paginationextradata:
-                count = self.db_model.all().count() # added for issue #138
+                count = self.db_model.all().count()  # added for issue #138
             if limit:
                 query = query.limit(limit)
-            query = self.schema.from_queryset(query) # added from issue #153
+            query = self.schema.from_queryset(query)  # added from issue #153
             if self.paginationextradata:
                 return {"results": await query, "count": await count}
             return await query
@@ -77,7 +91,7 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
     def _get_one(self, *args: Any, **kwargs: Any) -> CALLABLE:
         async def route(item_id: int) -> Model:
             model = await self.db_model.filter(id=item_id).first()
-            model = await self.schema.from_tortoise_orm(model) # added from issue #153
+            model = await self.schema.from_tortoise_orm(model)  # added from issue #153
             if model:
                 return model
             else:
