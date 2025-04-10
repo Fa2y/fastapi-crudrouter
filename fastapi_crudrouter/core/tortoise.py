@@ -85,11 +85,17 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
             if asyncio.coroutines.iscoroutine(using_db):
                 using_db = await using_db
             if sortby:
-                query = self.db_model.all(using_db=using_db).order_by(sortby).offset(cast(int, skip))
+                query = (
+                    self.db_model.all(using_db=using_db)
+                    .order_by(sortby)
+                    .offset(cast(int, skip))
+                )
             else:
                 query = self.db_model.all(using_db=using_db).offset(cast(int, skip))
             if self.paginationextradata:
-                count = self.db_model.all(using_db=using_db).count()  # added for issue #138
+                count = self.db_model.all(
+                    using_db=using_db
+                ).count()  # added for issue #138
             if limit:
                 query = query.limit(limit)
             query = self.schema.from_queryset(query)  # added from issue #153
@@ -100,7 +106,7 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
         return route
 
     def _get_one(self, *args: Any, **kwargs: Any) -> CALLABLE:
-        async def route(request:Request, item_id: int) -> Model:
+        async def route(request: Request, item_id: int) -> Model:
             using_db = (
                 self.using_db
                 if not callable(self.using_db)
@@ -108,10 +114,15 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
             )
             if asyncio.coroutines.iscoroutine(using_db):
                 using_db = await using_db
-            model = await self.db_model.filter(id=item_id, using_db=using_db).first()
-            model = await self.schema.from_tortoise_orm(model)  # added from issue #153
+            model = await self.db_model.filter(id=item_id).using_db(using_db).first()
             if model:
-                return model
+                model = await self.schema.from_tortoise_orm(
+                    model
+                )  # added from issue #153
+                if model:
+                    return model
+                else:
+                    raise NOT_FOUND
             else:
                 raise NOT_FOUND
 
@@ -135,7 +146,9 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
 
     def _update(self, *args: Any, **kwargs: Any) -> CALLABLE:
         async def route(
-            request:Request, item_id: int, model: self.update_schema  # type: ignore
+            item_id: int,
+            model: self.update_schema,
+            request: Request,  # type: ignore
         ) -> Model:
             using_db = (
                 self.using_db
@@ -144,10 +157,10 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
             )
             if asyncio.coroutines.iscoroutine(using_db):
                 using_db = await using_db
-            await self.db_model.filter(id=item_id, using_db=using_db).update(
-                **model.dict(exclude_unset=True), using_db=using_db
+            await self.db_model.filter(id=item_id).using_db(using_db).update(
+                **model.dict(exclude_unset=True)
             )
-            return await self._get_one()(item_id)
+            return await self._get_one()(item_id=item_id, request=request)
 
         return route
 
@@ -174,8 +187,8 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
             )
             if asyncio.coroutines.iscoroutine(using_db):
                 using_db = await using_db
-            model: Model = await self._get_one()(item_id)
-            await self.db_model.filter(id=item_id,using_db=using_db).delete(using_db=using_db)
+            model: Model = await self._get_one()(item_id=item_id, request=request)
+            await self.db_model.filter(id=item_id).using_db(using_db).delete()
 
             return model
 
