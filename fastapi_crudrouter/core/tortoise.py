@@ -49,7 +49,7 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
         self.db_model = db_model
         self._pk: str = db_model.describe()["pk_field"]["db_column"]
         self.paginationextradata = paginationextradata
-        self.using_db = kwargs.pop("using_db", None)
+        self.using_db = using_db
 
         super().__init__(
             schema=schema,
@@ -77,6 +77,7 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
                 pagination.get("limit"),
                 pagination.get("sortby"),
             )
+            print(using_db)
             using_db = (
                 self.using_db
                 if not callable(self.using_db)
