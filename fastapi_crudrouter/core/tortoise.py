@@ -77,7 +77,6 @@ class TortoiseCRUDRouter(CRUDGenerator[SCHEMA]):
                 pagination.get("limit"),
                 pagination.get("sortby"),
             )
-            print(using_db)
             using_db = (
                 self.using_db
                 if not callable(self.using_db)
